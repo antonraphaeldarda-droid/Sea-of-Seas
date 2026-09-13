@@ -36,7 +36,6 @@ if "victories" not in st.session_state:
 if "log" not in st.session_state:
     st.session_state.log = ["Willkommen im Hauptquartier, Kommandant."]
 
-# Multi-Tier Upgrade Specs definition
 GUN_UPGRADES = {
     1: {"name": "5-Zoll/38-Kaliber", "dmg": (20, 35), "cost": 0},
     2: {"name": "8-Zoll/55-Kaliber Mark 12", "dmg": (35, 50), "cost": 100},
@@ -68,7 +67,7 @@ ARMOR_UPGRADES = {
 if "ship_stats" not in st.session_state:
     st.session_state.ship_stats = {
         "Panzerkreuzer": {"hp": 100, "max_hp": 100, "ammo": 60, "armor_level": 0, "gun_level": 1, "torpedo_level": 1},
-        "Zerstörer": {"hp": 80, "max_hp": 80, "ammo": 50, "armor_level": 0, "gun_level": 1, "torpedo_level": 1},
+        "Zerstörer": {"hp": 80, "max_hp": 80, "ammo": 50, "armor_level": 0, "torpedo_level": 1},
         "Flugzeugträger": {"hp": 140, "max_hp": 140, "planes": 20, "max_planes": 20, "armor_level": 0, "plane_level": 1}
     }
 
@@ -111,7 +110,7 @@ if st.sidebar.button("🔄 Spiel zurücksetzen"):
 st.markdown("<h1 style='text-align: center; color: #38bdf8;'>⚓ SEA OF SEAS</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
-# GAME OVER HANDLER (Fixes Exploit)
+# GAME OVER HANDLER
 if ship_data["hp"] <= 0:
     st.error(f"💥 IHR SCHIFF WURDE IM KAMPF ZERSTÖRT! Mission gescheitert.")
     if st.button("Schiff für 100 G bergen & reparieren"):
@@ -171,7 +170,6 @@ elif st.session_state.view == "hq":
         if st.button("🚀 Zufällige Feindbegegnung suchen"):
             st.session_state.view = "combat"
             
-            # Dynamic Enemy scaling based on player's level (victories)
             lvl = st.session_state.victories
             enemy_types = [
                 ("Aufklärungs-Kutter", 40 + lvl*10, 5 + lvl*2, 12 + lvl*3, 40 + lvl*15),
@@ -195,11 +193,10 @@ elif st.session_state.view == "hq":
             st.session_state.view = "dock"
             st.rerun()
 
-# --- VIEW 2: DOCK (UPGRADE BAUM) ---
+# --- VIEW 2: DOCK (SCHIFFSSPEZIFISCH) ---
 elif st.session_state.view == "dock":
     st.subheader(f"⚓ Marine-Werft: Arsenalkatalog für {current_ship}")
     
-    # Reparieren & Munition
     c1, c2 = st.columns(2)
     with c1:
         if st.button("🛠️ Reparieren (+40 HP) - 40 G"):
@@ -241,8 +238,9 @@ elif st.session_state.view == "dock":
                         ship_data["armor_level"] = lvl
                         st.rerun()
 
-    st.markdown("---")
+    # GESCHÜTZE NUR FÜR PANZERKREUZER
     if current_ship == "Panzerkreuzer":
+        st.markdown("---")
         st.markdown("### 💥 Geschütz-Upgrades")
         cols_g = st.columns(3)
         for lvl in range(2, 5):
@@ -260,7 +258,9 @@ elif st.session_state.view == "dock":
                             ship_data["gun_level"] = lvl
                             st.rerun()
 
+    # TORPEDOS FÜR PANZERKREUZER UND ZERSTÖRER
     if current_ship in ["Panzerkreuzer", "Zerstörer"]:
+        st.markdown("---")
         st.markdown("### 🚀 Torpedo-Upgrades")
         cols_t = st.columns(3)
         for lvl in range(2, 5):
@@ -278,7 +278,9 @@ elif st.session_state.view == "dock":
                             ship_data["torpedo_level"] = lvl
                             st.rerun()
 
+    # STAFFELN NUR FÜR FLUGZEUGTRÄGER
     if current_ship == "Flugzeugträger":
+        st.markdown("---")
         st.markdown("### ✈️ Staffel-Upgrades")
         cols_p = st.columns(3)
         for lvl in range(2, 5):
@@ -322,7 +324,6 @@ elif st.session_state.view == "combat":
     st.markdown("---")
     b1, b2, b3 = st.columns(3)
     
-    # ACTIONS
     if current_ship == "Panzerkreuzer":
         g_info = GUN_UPGRADES[ship_data["gun_level"]]
         t_info = TORPEDO_UPGRADES[ship_data["torpedo_level"]]
@@ -380,7 +381,6 @@ elif st.session_state.view == "combat":
             add_log("Rückzug angetreten. Gefecht abgebrochen.")
             st.rerun()
 
-    # CHECK VICTORY / DAMAGE BACK
     if st.session_state.enemy_hp <= 0:
         st.balloons()
         reward = st.session_state.reward
