@@ -22,7 +22,7 @@ def render_image(image_path, caption=""):
     else:
         st.info(f"📷 [Artwork: {caption}]")
 
-# Global Session State
+# Global Session State Initialisierung
 if "view" not in st.session_state:
     st.session_state.view = "hq"
 if "ship_class" not in st.session_state:
@@ -30,54 +30,80 @@ if "ship_class" not in st.session_state:
 if "unlocked_ships" not in st.session_state:
     st.session_state.unlocked_ships = ["Schnellboot", "Zerstörer", "Panzerkreuzer", "Schlachtschiff", "Flugzeugträger"]
 if "credits" not in st.session_state:
-    st.session_state.credits = 150  # Ausgewogenes Startkapital
+    st.session_state.credits = 150
 if "victories" not in st.session_state:
     st.session_state.victories = 0
 if "log" not in st.session_state:
-    st.session_state.log = ["Flottenkommando bereit. Belohnungs-Balancing überarbeitet!"]
+    st.session_state.log = ["Flottenkommando bereit. Klassendifferenzierung überarbeitet!"]
 
-GUN_UPGRADES = {
-    1: {"name": "5-Zoll/38-Kaliber", "dmg": (20, 35), "cost": 0},
-    2: {"name": "8-Zoll/55-Kaliber Mark 12", "dmg": (35, 50), "cost": 120},
-    3: {"name": "16-Zoll/50-Kaliber Mark 7", "dmg": (55, 75), "cost": 280},
-    4: {"name": "18-Zoll/45-Kaliber Schweres Geschütz", "dmg": (80, 110), "cost": 500}
+# --- UPGRADE-TABELLEN ---
+
+# Kreuzer-Geschütze (Mittlere Kaliber)
+CRUISER_GUNS = {
+    1: {"name": "20,3-cm-L/55 Geschütz", "dmg": (30, 45), "cost": 0},
+    2: {"name": "20,3-cm-Mark 16 Dreifachturm", "dmg": (45, 60), "cost": 140},
+    3: {"name": "24-cm-Schnellladekanone", "dmg": (65, 85), "cost": 300}
+}
+
+# Schlachtschiff-Geschütze (Schwere Kaliber)
+BATTLESHIP_GUNS = {
+    1: {"name": "38-cm-SK C/34 (Schwere Artillerie)", "dmg": (60, 90), "cost": 0},
+    2: {"name": "40,6-cm-Mark 7 Drillingsgeschütz", "dmg": (90, 120), "cost": 250},
+    3: {"name": "46-cm-Typ 94 Megakanone", "dmg": (130, 170), "cost": 500}
 }
 
 TORPEDO_UPGRADES = {
     1: {"name": "Standard G7a Torpedo", "dmg": (35, 55), "cost": 0},
     2: {"name": "Akustischer Torpedo Mk 24", "dmg": (55, 75), "cost": 110},
-    3: {"name": "Sauerstoff-Torpedo Typ 93", "dmg": (80, 105), "cost": 250},
-    4: {"name": "Schwerer Homing-Torpedo Mk 48", "dmg": (110, 145), "cost": 480}
+    3: {"name": "Sauerstoff-Torpedo Typ 93", "dmg": (80, 105), "cost": 250}
 }
 
 PLANE_UPGRADES = {
-    1: {"name": "SBD Dauntless (Propeller)", "dmg": (45, 75), "cost": 0},
-    2: {"name": "SB2C Helldiver (Erweitert)", "dmg": (70, 100), "cost": 150},
-    3: {"name": "F-4 Phantom Jetbomber", "dmg": (100, 140), "cost": 320},
-    4: {"name": "A-6 Intruder Stealth-Bomber", "dmg": (145, 190), "cost": 550}
+    1: {"name": "SBD Dauntless Bomber", "dmg": (45, 75), "cost": 0},
+    2: {"name": "SB2C Helldiver Staffel", "dmg": (70, 100), "cost": 150},
+    3: {"name": "A-6 Intruder Jetstaffel", "dmg": (110, 150), "cost": 350}
 }
 
 ARMOR_UPGRADES = {
-    0: {"name": "Keine Panzerung (0 cm)", "red": 0.0, "cost": 0},
-    1: {"name": "Leichte Panzerung (10 cm / -10% Dmg)", "red": 0.10, "cost": 90},
-    2: {"name": "Mittlere Panzerung (20 cm / -20% Dmg)", "red": 0.20, "cost": 220},
-    3: {"name": "Schwere Gürtelpanzerung (30 cm / -30% Dmg)", "red": 0.30, "cost": 450}
+    0: {"name": "Standard-Panzerung", "red": 0.0, "cost": 0},
+    1: {"name": "Gürtelpanzerung (-15% Dmg)", "red": 0.15, "cost": 120},
+    2: {"name": "Zitadellen-Schutz (-30% Dmg)", "red": 0.30, "cost": 280}
 }
 
 HP_UPGRADES = {
     0: {"name": "Standard-Rumpf", "bonus": 0, "cost": 0},
-    1: {"name": "Verstärkte Schottwände (+30 HP)", "bonus": 30, "cost": 110},
-    2: {"name": "Doppelter Stahlrumpf (+70 HP)", "bonus": 70, "cost": 260},
-    3: {"name": "Titan-Schiffs Panzer (+120 HP)", "bonus": 120, "cost": 480}
+    1: {"name": "Verstärkte Schottwände (+40 HP)", "bonus": 40, "cost": 130},
+    2: {"name": "Doppelter Stahlrumpf (+90 HP)", "bonus": 90, "cost": 300}
 }
 
+# Schiffswerte-Initialisierung
 if "ship_stats" not in st.session_state:
     st.session_state.ship_stats = {
-        "Schnellboot": {"hp": 50, "base_max_hp": 50, "max_hp": 50, "ammo": 30, "armor_level": 0, "hp_level": 0, "torpedo_level": 1},
-        "Zerstörer": {"hp": 80, "base_max_hp": 80, "max_hp": 80, "ammo": 50, "armor_level": 0, "hp_level": 0, "torpedo_level": 1},
-        "Panzerkreuzer": {"hp": 110, "base_max_hp": 110, "max_hp": 110, "ammo": 60, "armor_level": 0, "hp_level": 0, "gun_level": 1, "torpedo_level": 1},
-        "Schlachtschiff": {"hp": 180, "base_max_hp": 180, "max_hp": 180, "ammo": 80, "armor_level": 0, "hp_level": 0, "gun_level": 1},
-        "Flugzeugträger": {"hp": 140, "base_max_hp": 140, "max_hp": 140, "planes": 20, "max_planes": 20, "armor_level": 0, "hp_level": 0, "plane_level": 1}
+        "Schnellboot": {
+            "hp": 45, "base_max_hp": 45, "max_hp": 45, "ammo": 24, 
+            "armor_level": 0, "hp_level": 0, "torpedo_level": 1,
+            "desc": "Extrem wendig (Ausweichchance), greift nur mit Torpedos an."
+        },
+        "Zerstörer": {
+            "hp": 75, "base_max_hp": 75, "max_hp": 75, "ammo": 40, 
+            "armor_level": 0, "hp_level": 0, "torpedo_level": 1,
+            "desc": "Schnell & getarnt (Nebelwand), fokussiert auf Torpedoangriffe."
+        },
+        "Panzerkreuzer": {
+            "hp": 110, "base_max_hp": 110, "max_hp": 110, "ammo": 60, 
+            "armor_level": 0, "hp_level": 0, "cruiser_gun_level": 1, "torpedo_level": 1,
+            "desc": "Ausgewogener Allrounder mit mittleren Geschützen & Torpedos."
+        },
+        "Schlachtschiff": {
+            "hp": 200, "base_max_hp": 200, "max_hp": 200, "ammo": 80, 
+            "armor_level": 0, "hp_level": 0, "bs_gun_level": 1,
+            "desc": "Schwimmende Festung. Enormer Schaden durch schwerste Artillerie, keine Torpedos."
+        },
+        "Flugzeugträger": {
+            "hp": 130, "base_max_hp": 130, "max_hp": 130, "planes": 15, "max_planes": 15, 
+            "armor_level": 0, "hp_level": 0, "plane_level": 1,
+            "desc": "Greift über Distanz mit Flugzeugstaffeln an."
+        }
     }
 
 def add_log(msg):
@@ -113,13 +139,13 @@ st.markdown("---")
 
 # GAME OVER HANDLER
 if ship_data["hp"] <= 0:
-    st.error(f"💥 IHR SCHIFF WURDE IM KAMPF ZERSTÖRT! Mission gescheitert.")
+    st.error(f"💥 IHR SCHIFF WURDE ZERSTÖRT! Mission gescheitert.")
     if st.button("Schiff für 50 G bergen & reparieren"):
         if st.session_state.credits >= 50:
             st.session_state.credits -= 50
             ship_data["hp"] = ship_data["max_hp"]
             st.session_state.view = "hq"
-            add_log("🛠️ Schiff geborgen und im HQ neu aufgestellt.")
+            add_log("🛠️ Schiff geborgen und neu aufgestellt.")
             st.rerun()
         else:
             st.error("Insolvent! Nicht genug Credits zur Bergung.")
@@ -133,9 +159,8 @@ elif st.session_state.view == "hq":
     st.subheader("🌐 Befehlslage & Flotten-Hangar")
     col1, col2 = st.columns([3, 2])
     
-    img_name = f"{current_ship.lower()}.png"
     with col1:
-        render_image(img_name, f"Flaggschiff: {current_ship}")
+        render_image(f"{current_ship.lower()}.png", f"Flaggschiff: {current_ship}")
     
     with col2:
         st.markdown("### 🛳️ Schiffsklasse wählen")
@@ -145,27 +170,22 @@ elif st.session_state.view == "hq":
             add_log(f"Kommando gewechselt auf: {selected_ship}")
             st.rerun()
 
+        st.caption(f"ℹ️ {ship_data['desc']}")
         st.markdown("---")
-        st.markdown("### 📊 Aktuelle Bewaffnung & Stats")
+        st.markdown("### 📊 Bewaffnung & Stats")
         st.write(f"- ❤️ **Max HP:** {ship_data['max_hp']} HP")
         
-        if current_ship == "Schnellboot":
+        if current_ship in ["Schnellboot", "Zerstörer"]:
             t_info = TORPEDO_UPGRADES[ship_data["torpedo_level"]]
             st.write(f"- 🚀 **Torpedos:** {t_info['name']} (`{t_info['dmg'][0]}-{t_info['dmg'][1]}` HP)")
-            st.write(f"- ⚡ **Eigenschaft:** Hohe Ausweichchance")
-        elif current_ship == "Zerstörer":
-            t_info = TORPEDO_UPGRADES[ship_data["torpedo_level"]]
-            st.write(f"- 🚀 **Torpedos:** {t_info['name']} (`{t_info['dmg'][0]}-{t_info['dmg'][1]}` HP)")
-            st.write(f"- 💨 **Eigenschaft:** Nebelwand-Tarnung")
         elif current_ship == "Panzerkreuzer":
-            g_info = GUN_UPGRADES[ship_data["gun_level"]]
+            g_info = CRUISER_GUNS[ship_data["cruiser_gun_level"]]
             t_info = TORPEDO_UPGRADES[ship_data["torpedo_level"]]
-            st.write(f"- 💥 **Geschütz:** {g_info['name']} (`{g_info['dmg'][0]}-{g_info['dmg'][1]}` HP)")
+            st.write(f"- 💥 **Mittlere Artillerie:** {g_info['name']} (`{g_info['dmg'][0]}-{g_info['dmg'][1]}` HP)")
             st.write(f"- 🚀 **Torpedos:** {t_info['name']} (`{t_info['dmg'][0]}-{t_info['dmg'][1]}` HP)")
         elif current_ship == "Schlachtschiff":
-            g_info = GUN_UPGRADES[ship_data["gun_level"]]
-            st.write(f"- 💥 **Schwere Artillerie:** {g_info['name']} (`{g_info['dmg'][0]}-{g_info['dmg'][1]}` HP)")
-            st.write(f"- 🛡️ **Eigenschaft:** Hohe Panzerung & HP")
+            g_info = BATTLESHIP_GUNS[ship_data["bs_gun_level"]]
+            st.write(f"- 💥 **Schwerste Artillerie:** {g_info['name']} (`{g_info['dmg'][0]}-{g_info['dmg'][1]}` HP)")
         elif current_ship == "Flugzeugträger":
             p_info = PLANE_UPGRADES[ship_data["plane_level"]]
             st.write(f"- ✈️ **Staffel:** {p_info['name']} (`{p_info['dmg'][0]}-{p_info['dmg'][1]}` HP)")
@@ -175,16 +195,13 @@ elif st.session_state.view == "hq":
         st.markdown("---")
         if st.button("🚀 Feindbegegnung suchen"):
             st.session_state.view = "combat"
-            
             lvl = st.session_state.victories
-            # Reduzierte Belohnungen für besseres Balancing
             enemy_types = [
-                ("Spähboot", 35 + lvl*8, 5 + lvl*2, 10 + lvl*2, 15 + lvl*5),
-                ("Fregatte", 65 + lvl*12, 8 + lvl*2, 18 + lvl*3, 30 + lvl*8),
-                ("Panzerschiff", 110 + lvl*15, 12 + lvl*3, 25 + lvl*4, 55 + lvl*12),
-                ("Elite-Schlachtschiff", 160 + lvl*25, 20 + lvl*4, 38 + lvl*5, 90 + lvl*20)
+                ("Spähboot", 35 + lvl*8, 5 + lvl*2, 10 + lvl*2, 20 + lvl*5),
+                ("Fregatte", 65 + lvl*12, 8 + lvl*2, 18 + lvl*3, 35 + lvl*8),
+                ("Panzerschiff", 110 + lvl*15, 12 + lvl*3, 25 + lvl*4, 60 + lvl*12),
+                ("Elite-Schlachtschiff", 170 + lvl*25, 22 + lvl*4, 40 + lvl*5, 100 + lvl*20)
             ]
-            
             chosen = random.choice(enemy_types)
             st.session_state.enemy_name = chosen[0]
             st.session_state.enemy_max_hp = chosen[1]
@@ -218,84 +235,63 @@ elif st.session_state.view == "dock":
                 if st.session_state.credits >= 30:
                     st.session_state.credits -= 30
                     ship_data["planes"] = min(ship_data["max_planes"], ship_data["planes"] + 5)
-                    add_log("✈️ Nachschub geliefert.")
+                    add_log("✈️ Staffel aufgestockt.")
                     st.rerun()
         else:
             if st.button("💣 Munition (+25) - 20 G"):
                 if st.session_state.credits >= 20:
                     st.session_state.credits -= 20
                     ship_data["ammo"] += 25
-                    add_log("💣 Munition geladen.")
+                    add_log("💣 Munition nachgeladen.")
                     st.rerun()
 
-    # --- HP UPGRADES ---
-    st.markdown("---")
-    st.markdown("### ❤️ Max-HP & Rumpf-Verstärkung")
-    cols_hp = st.columns(3)
-    for lvl in range(1, 4):
-        info = HP_UPGRADES[lvl]
-        with cols_hp[lvl-1]:
-            st.markdown(f"**Stufe {lvl}: {info['name']}**")
-            st.caption(f"Preis: {info['cost']} G")
-            if ship_data["hp_level"] == lvl:
-                st.success("✅ Ausgerüstet")
-            else:
-                if st.button(f"Ausrüsten ({info['cost']} G)", key=f"hp_{lvl}"):
-                    if st.session_state.credits >= info["cost"]:
-                        st.session_state.credits -= info["cost"]
-                        hp_diff = info["bonus"] - HP_UPGRADES[ship_data["hp_level"]]["bonus"]
-                        ship_data["hp_level"] = lvl
-                        ship_data["max_hp"] = ship_data["base_max_hp"] + info["bonus"]
-                        ship_data["hp"] = max(1, ship_data["hp"] + hp_diff)
-                        add_log(f"❤️ Max-HP erhöht auf {ship_data['max_hp']}!")
-                        st.rerun()
-
-    # --- PANZERUNGS UPGRADES ---
-    st.markdown("---")
-    st.markdown("### 🛡️ Panzerungs-Upgrades")
-    cols_arm = st.columns(3)
-    for lvl in range(1, 4):
-        info = ARMOR_UPGRADES[lvl]
-        with cols_arm[lvl-1]:
-            st.markdown(f"**Stufe {lvl}: {info['name']}**")
-            st.caption(f"Preis: {info['cost']} G")
-            if ship_data["armor_level"] == lvl:
-                st.success("✅ Ausgerüstet")
-            else:
-                if st.button(f"Ausrüsten ({info['cost']} G)", key=f"arm_{lvl}"):
-                    if st.session_state.credits >= info["cost"]:
-                        st.session_state.credits -= info["cost"]
-                        ship_data["armor_level"] = lvl
-                        add_log(f"🛡️ Panzerung gewechselt auf Stufe {lvl}!")
-                        st.rerun()
-
-    # GESCHÜTZE (Panzerkreuzer & Schlachtschiff)
-    if current_ship in ["Panzerkreuzer", "Schlachtschiff"]:
+    # --- GESCHÜTZE ---
+    if current_ship == "Panzerkreuzer":
         st.markdown("---")
-        st.markdown("### 💥 Geschütz-Upgrades")
-        cols_g = st.columns(3)
-        for lvl in range(2, 5):
-            info = GUN_UPGRADES[lvl]
+        st.markdown("### 💥 Mittlere Artillerie (Kreuzer-Geschütze)")
+        cols_g = st.columns(2)
+        for lvl in [2, 3]:
+            info = CRUISER_GUNS[lvl]
             with cols_g[lvl-2]:
                 st.markdown(f"**Stufe {lvl}: {info['name']}**")
                 st.write(f"Schaden: `{info['dmg'][0]}-{info['dmg'][1]}`")
                 st.caption(f"Preis: {info['cost']} G")
-                if ship_data.get("gun_level") == lvl:
+                if ship_data.get("cruiser_gun_level") == lvl:
                     st.success("✅ Ausgerüstet")
                 else:
-                    if st.button(f"Ausrüsten ({info['cost']} G)", key=f"gun_{lvl}"):
+                    if st.button(f"Kaufen ({info['cost']} G)", key=f"cgun_{lvl}"):
                         if st.session_state.credits >= info["cost"]:
                             st.session_state.credits -= info["cost"]
-                            ship_data["gun_level"] = lvl
-                            add_log(f"💥 Geschütz gewechselt auf Stufe {lvl}!")
+                            ship_data["cruiser_gun_level"] = lvl
+                            add_log(f"💥 Kreuzer-Geschütz auf Stufe {lvl} aufgerüstet!")
+                            st.rerun()
+
+    elif current_ship == "Schlachtschiff":
+        st.markdown("---")
+        st.markdown("### 💥 Schwerste Artillerie (Schlachtschiff-Hauptkanonen)")
+        cols_g = st.columns(2)
+        for lvl in [2, 3]:
+            info = BATTLESHIP_GUNS[lvl]
+            with cols_g[lvl-2]:
+                st.markdown(f"**Stufe {lvl}: {info['name']}**")
+                st.write(f"Schaden: `{info['dmg'][0]}-{info['dmg'][1]}`")
+                st.caption(f"Preis: {info['cost']} G")
+                if ship_data.get("bs_gun_level") == lvl:
+                    st.success("✅ Ausgerüstet")
+                else:
+                    if st.button(f"Kaufen ({info['cost']} G)", key=f"bsgun_{lvl}"):
+                        if st.session_state.credits >= info["cost"]:
+                            st.session_state.credits -= info["cost"]
+                            ship_data["bs_gun_level"] = lvl
+                            add_log(f"💥 Schweres Schlachtschiff-Geschütz auf Stufe {lvl} aufgerüstet!")
                             st.rerun()
 
     # TORPEDOS (Schnellboot, Zerstörer & Panzerkreuzer)
     if current_ship in ["Schnellboot", "Zerstörer", "Panzerkreuzer"]:
         st.markdown("---")
-        st.markdown("### 🚀 Torpedo-Upgrades")
-        cols_t = st.columns(3)
-        for lvl in range(2, 5):
+        st.markdown("### 🚀 Torpedo-Systeme")
+        cols_t = st.columns(2)
+        for lvl in [2, 3]:
             info = TORPEDO_UPGRADES[lvl]
             with cols_t[lvl-2]:
                 st.markdown(f"**Stufe {lvl}: {info['name']}**")
@@ -304,33 +300,46 @@ elif st.session_state.view == "dock":
                 if ship_data.get("torpedo_level") == lvl:
                     st.success("✅ Ausgerüstet")
                 else:
-                    if st.button(f"Ausrüsten ({info['cost']} G)", key=f"torp_{lvl}"):
+                    if st.button(f"Kaufen ({info['cost']} G)", key=f"torp_{lvl}"):
                         if st.session_state.credits >= info["cost"]:
                             st.session_state.credits -= info["cost"]
                             ship_data["torpedo_level"] = lvl
-                            add_log(f"🚀 Torpedo gewechselt auf Stufe {lvl}!")
+                            add_log(f"🚀 Torpedosystem auf Stufe {lvl} aufgerüstet!")
                             st.rerun()
 
-    # STAFFELN (Flugzeugträger)
-    if current_ship == "Flugzeugträger":
-        st.markdown("---")
-        st.markdown("### ✈️ Staffel-Upgrades")
-        cols_p = st.columns(3)
-        for lvl in range(2, 5):
-            info = PLANE_UPGRADES[lvl]
-            with cols_p[lvl-2]:
-                st.markdown(f"**Stufe {lvl}: {info['name']}**")
-                st.write(f"Schaden: `{info['dmg'][0]}-{info['dmg'][1]}`")
-                st.caption(f"Preis: {info['cost']} G")
-                if ship_data["plane_level"] == lvl:
-                    st.success("✅ Ausgerüstet")
-                else:
-                    if st.button(f"Ausrüsten ({info['cost']} G)", key=f"plane_{lvl}"):
-                        if st.session_state.credits >= info["cost"]:
-                            st.session_state.credits -= info["cost"]
-                            ship_data["plane_level"] = lvl
-                            add_log(f"✈️ Staffel gewechselt auf Stufe {lvl}!")
-                            st.rerun()
+    # --- PANZERUNG & HP ---
+    st.markdown("---")
+    st.markdown("### 🛡️ Rumpf & Panzerung")
+    col_hp, col_arm = st.columns(2)
+    with col_hp:
+        st.markdown("**HP-Erweiterung (Stufe 2):**")
+        info_hp = HP_UPGRADES[2]
+        st.caption(f"{info_hp['name']} (+90 HP) - {info_hp['cost']} G")
+        if ship_data["hp_level"] < 2:
+            if st.button(f"Rumpf aufrüsten ({info_hp['cost']} G)"):
+                if st.session_state.credits >= info_hp["cost"]:
+                    st.session_state.credits -= info_hp["cost"]
+                    ship_data["hp_level"] = 2
+                    ship_data["max_hp"] = ship_data["base_max_hp"] + info_hp["bonus"]
+                    ship_data["hp"] += 90
+                    add_log("❤️ Rumpf auf Stufe 2 verstärkt!")
+                    st.rerun()
+        else:
+            st.success("✅ Rumpf auf Maximum")
+
+    with col_arm:
+        st.markdown("**Zitadellen-Panzerung (Stufe 2):**")
+        info_arm = ARMOR_UPGRADES[2]
+        st.caption(f"{info_arm['name']} (-30% Dmg) - {info_arm['cost']} G")
+        if ship_data["armor_level"] < 2:
+            if st.button(f"Panzerung installieren ({info_arm['cost']} G)"):
+                if st.session_state.credits >= info_arm["cost"]:
+                    st.session_state.credits -= info_arm["cost"]
+                    ship_data["armor_level"] = 2
+                    add_log("🛡️ Schwerste Panzerung installiert!")
+                    st.rerun()
+        else:
+            st.success("✅ Panzerung auf Maximum")
 
     st.markdown("---")
     if st.button("⬅️ Zurück zum HQ"):
@@ -361,15 +370,15 @@ elif st.session_state.view == "combat":
     if current_ship == "Schnellboot":
         t_info = TORPEDO_UPGRADES[ship_data["torpedo_level"]]
         with b1:
-            if st.button(f"🚀 {t_info['name']} [-6 Mun]"):
-                if ship_data["ammo"] >= 6:
-                    ship_data["ammo"] -= 6
+            if st.button(f"🚀 {t_info['name']} [-5 Mun]"):
+                if ship_data["ammo"] >= 5:
+                    ship_data["ammo"] -= 5
                     dmg = random.randint(t_info["dmg"][0], t_info["dmg"][1])
                     st.session_state.enemy_hp -= dmg
                     add_log(f"🚀 Schnellboot-Torpedo trifft für {dmg} Schaden!")
                 st.rerun()
         with b2:
-            if st.button("⚡ High-Speed Ausweichen"):
+            if st.button("⚡ High-Speed-Ausweichen"):
                 add_log("⚡ Schnellboot schlägt Zick-Zack-Kurs ein!")
                 st.rerun()
 
@@ -389,39 +398,39 @@ elif st.session_state.view == "combat":
                 st.rerun()
 
     elif current_ship == "Panzerkreuzer":
-        g_info = GUN_UPGRADES[ship_data["gun_level"]]
+        g_info = CRUISER_GUNS[ship_data["cruiser_gun_level"]]
         t_info = TORPEDO_UPGRADES[ship_data["torpedo_level"]]
         with b1:
-            if st.button(f"💥 {g_info['name']} [-5 Mun]"):
-                if ship_data["ammo"] >= 5:
-                    ship_data["ammo"] -= 5
+            if st.button(f"💥 {g_info['name']} [-4 Mun]"):
+                if ship_data["ammo"] >= 4:
+                    ship_data["ammo"] -= 4
                     dmg = random.randint(g_info["dmg"][0], g_info["dmg"][1])
                     st.session_state.enemy_hp -= dmg
                     add_log(f"💥 Kanone trifft für {dmg} Schaden.")
                 st.rerun()
         with b2:
-            if st.button(f"🚀 {t_info['name']} [-12 Mun]"):
-                if ship_data["ammo"] >= 12:
-                    ship_data["ammo"] -= 12
+            if st.button(f"🚀 {t_info['name']} [-10 Mun]"):
+                if ship_data["ammo"] >= 10:
+                    ship_data["ammo"] -= 10
                     dmg = random.randint(t_info["dmg"][0], t_info["dmg"][1])
                     st.session_state.enemy_hp -= dmg
                     add_log(f"🚀 Torpedo trifft für {dmg} Schaden!")
                 st.rerun()
 
     elif current_ship == "Schlachtschiff":
-        g_info = GUN_UPGRADES[ship_data["gun_level"]]
+        g_info = BATTLESHIP_GUNS[ship_data["bs_gun_level"]]
         with b1:
-            if st.button(f"💥 Breitseite: {g_info['name']} [-10 Mun]"):
-                if ship_data["ammo"] >= 10:
-                    ship_data["ammo"] -= 10
-                    dmg = int(random.randint(g_info["dmg"][0], g_info["dmg"][1]) * 1.25)
+            if st.button(f"💥 Brecher-Breitseite: {g_info['name']} [-12 Mun]"):
+                if ship_data["ammo"] >= 12:
+                    ship_data["ammo"] -= 12
+                    dmg = random.randint(g_info["dmg"][0], g_info["dmg"][1])
                     st.session_state.enemy_hp -= dmg
-                    add_log(f"💥 Massive Breitseite trifft für {dmg} Schaden!")
+                    add_log(f"💥 ZERSTÖRERISCHE BREITSEITE trifft für {dmg} Schaden!")
                 st.rerun()
         with b2:
-            if st.button("🛡️ Schadenskontrolle"):
-                ship_data["hp"] = min(ship_data["max_hp"], ship_data["hp"] + 15)
-                add_log("🛠️ Crew führt Notfall-Reparaturen durch (+15 HP).")
+            if st.button("🛡️ Schadenskontroll-Team"):
+                ship_data["hp"] = min(ship_data["max_hp"], ship_data["hp"] + 20)
+                add_log("🛠️ Crew führt Reparaturen durch (+20 HP).")
                 st.rerun()
 
     elif current_ship == "Flugzeugträger":
@@ -431,35 +440,32 @@ elif st.session_state.view == "combat":
                 if ship_data["planes"] > 0:
                     dmg = random.randint(p_info["dmg"][0], p_info["dmg"][1])
                     st.session_state.enemy_hp -= dmg
-                    lost = random.choice([0, 0, 1])
-                    ship_data["planes"] = max(0, ship_data["planes"] - lost)
+                    if random.random() < 0.3:
+                        ship_data["planes"] -= 1
                     add_log(f"✈️ Luftschlag trifft für {dmg} Schaden!")
-                st.rerun()
-        with b2:
-            if st.button("🛡️ Jäger-Eskorte"):
-                add_log("🛡️ Luftraum gesichert.")
                 st.rerun()
 
     with b3:
         if st.button("🏃 Rückzug"):
             st.session_state.view = "hq"
-            add_log("Rückzug angetreten. Gefecht abgebrochen.")
+            add_log("Rückzug angetreten.")
             st.rerun()
 
+    # FEINDREAKTION
     if st.session_state.enemy_hp <= 0:
         st.balloons()
         reward = st.session_state.reward
         st.session_state.credits += reward
         st.session_state.victories += 1
-        add_log(f"🎉 SIEG! Feind zerstört (+{reward} G). Rang gestiegen!")
+        add_log(f"🎉 SIEG! Feind zerstört (+{reward} G).")
         st.session_state.view = "hq"
         st.rerun()
     elif st.session_state.enemy_hp < st.session_state.enemy_max_hp:
         raw_dmg = random.randint(st.session_state.enemy_min_dmg, st.session_state.enemy_max_dmg)
         
-        # Schnellboot-Ausweichchance
-        if current_ship == "Schnellboot" and random.random() < 0.35:
-            add_log("💨 Schnellboot ist dem Ausweichmanöver geglückt!")
+        # Schnellboot hat 40% Ausweichchance
+        if current_ship == "Schnellboot" and random.random() < 0.40:
+            add_log("💨 Schnellboot ist dem Gegner durch Tempo ausgewichen!")
         else:
             red = ARMOR_UPGRADES[ship_data["armor_level"]]["red"]
             actual_dmg = int(raw_dmg * (1.0 - red))
