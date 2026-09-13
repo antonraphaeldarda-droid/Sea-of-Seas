@@ -27,14 +27,15 @@ if "view" not in st.session_state:
     st.session_state.view = "hq"
 if "ship_class" not in st.session_state:
     st.session_state.ship_class = "Panzerkreuzer"
+# ALLE SCHIFFE DIREKT FREIGESCHALTET ZUM TESTEN:
 if "unlocked_ships" not in st.session_state:
-    st.session_state.unlocked_ships = ["Panzerkreuzer"]
+    st.session_state.unlocked_ships = ["Panzerkreuzer", "Zerstörer", "Flugzeugträger"]
 if "credits" not in st.session_state:
-    st.session_state.credits = 250
+    st.session_state.credits = 500  # Etwas mehr Startguthaben zum Testen
 if "victories" not in st.session_state:
     st.session_state.victories = 0
 if "log" not in st.session_state:
-    st.session_state.log = ["Willkommen im Hauptquartier, Kommandant."]
+    st.session_state.log = ["Willkommen im Hauptquartier, Kommandant. Alle Schiffe stehen zum Test bereit!"]
 
 GUN_UPGRADES = {
     1: {"name": "5-Zoll/38-Kaliber", "dmg": (20, 35), "cost": 0},
@@ -64,11 +65,18 @@ ARMOR_UPGRADES = {
     3: {"name": "Schwere Gürtelpanzerung (30 cm / -30% Dmg)", "red": 0.30, "cost": 320}
 }
 
+HP_UPGRADES = {
+    0: {"name": "Standard-Rumpf", "bonus": 0, "cost": 0},
+    1: {"name": "Verstärkte Schottwände (+30 HP)", "bonus": 30, "cost": 100},
+    2: {"name": "Doppelter Stahlrumpf (+70 HP)", "bonus": 70, "cost": 230},
+    3: {"name": "Titan-Schiffs Panzer (+120 HP)", "bonus": 120, "cost": 400}
+}
+
 if "ship_stats" not in st.session_state:
     st.session_state.ship_stats = {
-        "Panzerkreuzer": {"hp": 100, "max_hp": 100, "ammo": 60, "armor_level": 0, "gun_level": 1, "torpedo_level": 1},
-        "Zerstörer": {"hp": 80, "max_hp": 80, "ammo": 50, "armor_level": 0, "torpedo_level": 1},
-        "Flugzeugträger": {"hp": 140, "max_hp": 140, "planes": 20, "max_planes": 20, "armor_level": 0, "plane_level": 1}
+        "Panzerkreuzer": {"hp": 100, "base_max_hp": 100, "max_hp": 100, "ammo": 60, "armor_level": 0, "hp_level": 0, "gun_level": 1, "torpedo_level": 1},
+        "Zerstörer": {"hp": 80, "base_max_hp": 80, "max_hp": 80, "ammo": 50, "armor_level": 0, "hp_level": 0, "torpedo_level": 1},
+        "Flugzeugträger": {"hp": 140, "base_max_hp": 140, "max_hp": 140, "planes": 20, "max_planes": 20, "armor_level": 0, "hp_level": 0, "plane_level": 1}
     }
 
 def add_log(msg):
@@ -76,14 +84,6 @@ def add_log(msg):
 
 current_ship = st.session_state.ship_class
 ship_data = st.session_state.ship_stats[current_ship]
-
-# --- UNLOCK CHECK ---
-if st.session_state.victories >= 3 and "Zerstörer" not in st.session_state.unlocked_ships:
-    st.session_state.unlocked_ships.append("Zerstörer")
-    add_log("🎉 NEUES SCHIFF FREIGESCHALTET: Zerstörer!")
-if st.session_state.victories >= 7 and "Flugzeugträger" not in st.session_state.unlocked_ships:
-    st.session_state.unlocked_ships.append("Flugzeugträger")
-    add_log("🎉 NEUES SCHIFF FREIGESCHALTET: Flugzeugträger!")
 
 # --- SIDEBAR ---
 st.sidebar.markdown("## ⚓ FLOTTEN-DASHBOARD")
@@ -150,7 +150,8 @@ elif st.session_state.view == "hq":
             st.rerun()
 
         st.markdown("---")
-        st.markdown("### 📊 Aktuelle Bewaffnung & Schaden")
+        st.markdown("### 📊 Aktuelle Bewaffnung & Stats")
+        st.write(f"- ❤️ **Max HP:** {ship_data['max_hp']} HP")
         if current_ship == "Panzerkreuzer":
             g_info = GUN_UPGRADES[ship_data["gun_level"]]
             t_info = TORPEDO_UPGRADES[ship_data["torpedo_level"]]
@@ -193,7 +194,7 @@ elif st.session_state.view == "hq":
             st.session_state.view = "dock"
             st.rerun()
 
-# --- VIEW 2: DOCK (SCHIFFSSPEZIFISCH) ---
+# --- VIEW 2: DOCK (MIT HP & SPESIFISCHEN UPGRADES) ---
 elif st.session_state.view == "dock":
     st.subheader(f"⚓ Marine-Werft: Arsenalkatalog für {current_ship}")
     
@@ -221,6 +222,28 @@ elif st.session_state.view == "dock":
                     add_log("💣 Munition geladen.")
                     st.rerun()
 
+    # --- HP UPGRADES ---
+    st.markdown("---")
+    st.markdown("### ❤️ Max-HP & Rumpf-Verstärkung")
+    cols_hp = st.columns(3)
+    for lvl in range(1, 4):
+        info = HP_UPGRADES[lvl]
+        with cols_hp[lvl-1]:
+            st.markdown(f"**Stufe {lvl}: {info['name']}**")
+            st.caption(f"Preis: {info['cost']} G")
+            if ship_data["hp_level"] >= lvl:
+                st.success("✅ Installiert")
+            else:
+                if st.button(f"Kaufen ({info['cost']} G)", key=f"hp_{lvl}"):
+                    if ship_data["hp_level"] == lvl - 1 and st.session_state.credits >= info["cost"]:
+                        st.session_state.credits -= info["cost"]
+                        ship_data["hp_level"] = lvl
+                        ship_data["max_hp"] = ship_data["base_max_hp"] + info["bonus"]
+                        ship_data["hp"] += info["bonus"]  # HP direkt gutschreiben
+                        add_log(f"❤️ Max-HP erhöht auf {ship_data['max_hp']}!")
+                        st.rerun()
+
+    # --- PANZERUNGS UPGRADES ---
     st.markdown("---")
     st.markdown("### 🛡️ Panzerungs-Upgrades")
     cols_arm = st.columns(3)
