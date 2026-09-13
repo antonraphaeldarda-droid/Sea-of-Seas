@@ -27,15 +27,14 @@ if "view" not in st.session_state:
     st.session_state.view = "hq"
 if "ship_class" not in st.session_state:
     st.session_state.ship_class = "Panzerkreuzer"
-# ALLE SCHIFFE DIREKT FREIGESCHALTET ZUM TESTEN:
 if "unlocked_ships" not in st.session_state:
     st.session_state.unlocked_ships = ["Panzerkreuzer", "Zerstörer", "Flugzeugträger"]
 if "credits" not in st.session_state:
-    st.session_state.credits = 500  # Etwas mehr Startguthaben zum Testen
+    st.session_state.credits = 1000  # Großzügiges Guthaben zum Testen der Top-Upgrades
 if "victories" not in st.session_state:
     st.session_state.victories = 0
 if "log" not in st.session_state:
-    st.session_state.log = ["Willkommen im Hauptquartier, Kommandant. Alle Schiffe stehen zum Test bereit!"]
+    st.session_state.log = ["Willkommen im Hauptquartier, Kommandant. Alle Upgrades sind ab sofort direkt kaufbar!"]
 
 GUN_UPGRADES = {
     1: {"name": "5-Zoll/38-Kaliber", "dmg": (20, 35), "cost": 0},
@@ -194,7 +193,7 @@ elif st.session_state.view == "hq":
             st.session_state.view = "dock"
             st.rerun()
 
-# --- VIEW 2: DOCK (MIT HP & SPESIFISCHEN UPGRADES) ---
+# --- VIEW 2: DOCK (DIREKTKAUF FÜR ALLE UPGRADES) ---
 elif st.session_state.view == "dock":
     st.subheader(f"⚓ Marine-Werft: Arsenalkatalog für {current_ship}")
     
@@ -231,16 +230,17 @@ elif st.session_state.view == "dock":
         with cols_hp[lvl-1]:
             st.markdown(f"**Stufe {lvl}: {info['name']}**")
             st.caption(f"Preis: {info['cost']} G")
-            if ship_data["hp_level"] >= lvl:
-                st.success("✅ Installiert")
+            if ship_data["hp_level"] == lvl:
+                st.success("✅ Ausgerüstet")
             else:
-                if st.button(f"Kaufen ({info['cost']} G)", key=f"hp_{lvl}"):
-                    if ship_data["hp_level"] == lvl - 1 and st.session_state.credits >= info["cost"]:
+                if st.button(f"Ausrüsten ({info['cost']} G)", key=f"hp_{lvl}"):
+                    if st.session_state.credits >= info["cost"]:
                         st.session_state.credits -= info["cost"]
+                        hp_diff = info["bonus"] - HP_UPGRADES[ship_data["hp_level"]]["bonus"]
                         ship_data["hp_level"] = lvl
                         ship_data["max_hp"] = ship_data["base_max_hp"] + info["bonus"]
-                        ship_data["hp"] += info["bonus"]  # HP direkt gutschreiben
-                        add_log(f"❤️ Max-HP erhöht auf {ship_data['max_hp']}!")
+                        ship_data["hp"] = max(1, ship_data["hp"] + hp_diff)
+                        add_log(f"❤️ Max-HP angepasst auf {ship_data['max_hp']}!")
                         st.rerun()
 
     # --- PANZERUNGS UPGRADES ---
@@ -252,13 +252,14 @@ elif st.session_state.view == "dock":
         with cols_arm[lvl-1]:
             st.markdown(f"**Stufe {lvl}: {info['name']}**")
             st.caption(f"Preis: {info['cost']} G")
-            if ship_data["armor_level"] >= lvl:
-                st.success("✅ Installiert")
+            if ship_data["armor_level"] == lvl:
+                st.success("✅ Ausgerüstet")
             else:
-                if st.button(f"Kaufen ({info['cost']} G)", key=f"arm_{lvl}"):
-                    if ship_data["armor_level"] == lvl - 1 and st.session_state.credits >= info["cost"]:
+                if st.button(f"Ausrüsten ({info['cost']} G)", key=f"arm_{lvl}"):
+                    if st.session_state.credits >= info["cost"]:
                         st.session_state.credits -= info["cost"]
                         ship_data["armor_level"] = lvl
+                        add_log(f"🛡️ Panzerung gewechselt auf Stufe {lvl}!")
                         st.rerun()
 
     # GESCHÜTZE NUR FÜR PANZERKREUZER
@@ -272,13 +273,14 @@ elif st.session_state.view == "dock":
                 st.markdown(f"**Stufe {lvl}: {info['name']}**")
                 st.write(f"Schaden: `{info['dmg'][0]}-{info['dmg'][1]}`")
                 st.caption(f"Preis: {info['cost']} G")
-                if ship_data["gun_level"] >= lvl:
-                    st.success("✅ Installiert")
+                if ship_data["gun_level"] == lvl:
+                    st.success("✅ Ausgerüstet")
                 else:
-                    if st.button(f"Kaufen ({info['cost']} G)", key=f"gun_{lvl}"):
-                        if ship_data["gun_level"] == lvl - 1 and st.session_state.credits >= info["cost"]:
+                    if st.button(f"Ausrüsten ({info['cost']} G)", key=f"gun_{lvl}"):
+                        if st.session_state.credits >= info["cost"]:
                             st.session_state.credits -= info["cost"]
                             ship_data["gun_level"] = lvl
+                            add_log(f"💥 Geschütz gewechselt auf Stufe {lvl}!")
                             st.rerun()
 
     # TORPEDOS FÜR PANZERKREUZER UND ZERSTÖRER
@@ -292,13 +294,14 @@ elif st.session_state.view == "dock":
                 st.markdown(f"**Stufe {lvl}: {info['name']}**")
                 st.write(f"Schaden: `{info['dmg'][0]}-{info['dmg'][1]}`")
                 st.caption(f"Preis: {info['cost']} G")
-                if ship_data["torpedo_level"] >= lvl:
-                    st.success("✅ Installiert")
+                if ship_data["torpedo_level"] == lvl:
+                    st.success("✅ Ausgerüstet")
                 else:
-                    if st.button(f"Kaufen ({info['cost']} G)", key=f"torp_{lvl}"):
-                        if ship_data["torpedo_level"] == lvl - 1 and st.session_state.credits >= info["cost"]:
+                    if st.button(f"Ausrüsten ({info['cost']} G)", key=f"torp_{lvl}"):
+                        if st.session_state.credits >= info["cost"]:
                             st.session_state.credits -= info["cost"]
                             ship_data["torpedo_level"] = lvl
+                            add_log(f"🚀 Torpedo gewechselt auf Stufe {lvl}!")
                             st.rerun()
 
     # STAFFELN NUR FÜR FLUGZEUGTRÄGER
@@ -312,13 +315,14 @@ elif st.session_state.view == "dock":
                 st.markdown(f"**Stufe {lvl}: {info['name']}**")
                 st.write(f"Schaden: `{info['dmg'][0]}-{info['dmg'][1]}`")
                 st.caption(f"Preis: {info['cost']} G")
-                if ship_data["plane_level"] >= lvl:
-                    st.success("✅ Installiert")
+                if ship_data["plane_level"] == lvl:
+                    st.success("✅ Ausgerüstet")
                 else:
-                    if st.button(f"Kaufen ({info['cost']} G)", key=f"plane_{lvl}"):
-                        if ship_data["plane_level"] == lvl - 1 and st.session_state.credits >= info["cost"]:
+                    if st.button(f"Ausrüsten ({info['cost']} G)", key=f"plane_{lvl}"):
+                        if st.session_state.credits >= info["cost"]:
                             st.session_state.credits -= info["cost"]
                             ship_data["plane_level"] = lvl
+                            add_log(f"✈️ Staffel gewechselt auf Stufe {lvl}!")
                             st.rerun()
 
     st.markdown("---")
