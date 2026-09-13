@@ -24,7 +24,7 @@ def render_image(image_path, caption=""):
 
 # Global Session State Initialisierung
 if "game_mode" not in st.session_state:
-    st.session_state.game_mode = "Normal" # "Normal" oder "Test / Sandbox"
+    st.session_state.game_mode = "Normal"
 if "view" not in st.session_state:
     st.session_state.view = "hq"
 if "ship_class" not in st.session_state:
@@ -46,7 +46,7 @@ CRUISER_GUNS = {
 }
 
 BATTLESHIP_GUNS = {
-    1: {"name": "38-cm-SK C/34 (Schwere Artillerie)", "dmg": (60, 90), "cost": 0},
+    1: {"name": "38-cm-SK C/34", "dmg": (60, 90), "cost": 0},
     2: {"name": "40,6-cm-Mark 7 Drillingsgeschütz", "dmg": (90, 120), "cost": 250},
     3: {"name": "46-cm-Typ 94 Megakanone", "dmg": (130, 170), "cost": 500}
 }
@@ -95,7 +95,7 @@ if "ship_stats" not in st.session_state:
         "Zerstörer": {
             "hp": 75, "base_max_hp": 75, "max_hp": 75, "ammo": 40, 
             "armor_level": 0, "hp_level": 0, "torpedo_level": 1,
-            "desc": "Schnell & getarnt (Nebelwand), fokussiert auf Torpedoangriffe & U-Jagd."
+            "desc": "Schnell & getarnt (Nebelwand), fokussiert auf Torpedos & Wasserbomben."
         },
         "Panzerkreuzer": {
             "hp": 110, "base_max_hp": 110, "max_hp": 110, "ammo": 60, 
@@ -117,19 +117,32 @@ if "ship_stats" not in st.session_state:
 def add_log(msg):
     st.session_state.log.insert(0, msg)
 
-# --- SIDEBAR ---
+def apply_hp_upgrade(ship_dict):
+    bonus = HP_UPGRADES[ship_dict["hp_level"]]["bonus"]
+    old_max = ship_dict["max_hp"]
+    ship_dict["max_hp"] = ship_dict["base_max_hp"] + bonus
+    ship_dict["hp"] += (ship_dict["max_hp"] - old_max)
+
+# --- SIDEBAR & MODUS-SWITCH ---
 st.sidebar.markdown("## ⚙️ MODUS & EINSTELLUNGEN")
 
-mode = st.sidebar.radio("Spielmodus:", ["Standard (Karriere)", "🧪 Test / Developer Mode"])
-if mode.startswith("🧪") and st.session_state.game_mode != "Test":
+mode_options = ["Standard (Karriere)", "🧪 Test / Sandbox"]
+mode_idx = 0 if st.session_state.game_mode == "Normal" else 1
+
+selected_mode_str = st.sidebar.radio("Spielmodus wählen:", mode_options, index=mode_idx)
+
+# Sauberer Switch zwischen den Modi
+if selected_mode_str == "🧪 Test / Sandbox" and st.session_state.game_mode != "Test":
     st.session_state.game_mode = "Test"
     st.session_state.unlocked_ships = list(ALL_SHIPS)
     st.session_state.credits = 99999
-    add_log("🛠️ TEST-MODUS AKTIVIERT: Alle Schiffe freigeschaltet & unbegrenzte Credits!")
+    add_log("🛠️ TEST-MODUS AKTIVIERT: Alle Schiffe freigeschaltet & 99.999 Credits.")
     st.rerun()
-elif mode.startswith("Standard") and st.session_state.game_mode != "Normal":
+elif selected_mode_str == "Standard (Karriere)" and st.session_state.game_mode != "Normal":
     st.session_state.game_mode = "Normal"
-    add_log("🎮 Karrieremodus aktiv.")
+    st.session_state.unlocked_ships = ["Schnellboot", "Zerstörer", "Panzerkreuzer"]
+    st.session_state.credits = 150
+    add_log("🎮 Karrieremodus aktiv: Standards zurückgesetzt.")
     st.rerun()
 
 current_ship = st.session_state.ship_class
@@ -166,7 +179,7 @@ if st.sidebar.button("🔄 Spiel zurücksetzen"):
         del st.session_state[key]
     st.rerun()
 
-# --- TOP HEADER ---
+# --- HEADER ---
 st.markdown("<h1 style='text-align: center; color: #38bdf8;'>⚓ SEA OF SEAS</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
@@ -182,7 +195,7 @@ if ship_data["hp"] <= 0:
             add_log("🛠️ Schiff geborgen und neu aufgestellt.")
             st.rerun()
         else:
-            st.error("Insolvent! Nicht genug Credits zur Bergung.")
+            st.error("Nicht genug Credits zur Bergung!")
 
 # --- VIEW 1: HQ ---
 elif st.session_state.view == "hq":
@@ -194,7 +207,6 @@ elif st.session_state.view == "hq":
     
     with col2:
         st.markdown("### 🛳️ Schiffsklasse wählen")
-        
         available = st.session_state.unlocked_ships
         selected_ship = st.selectbox("Aktives Flaggschiff:", available, index=available.index(current_ship) if current_ship in available else 0)
         if selected_ship != current_ship:
@@ -204,7 +216,6 @@ elif st.session_state.view == "hq":
 
         st.caption(f"ℹ️ {ship_data['desc']}")
         
-        # Schiffskauf-Sektion im Karrieremodus
         if st.session_state.game_mode == "Normal":
             st.markdown("---")
             st.markdown("### 🛒 Neue Schiffsklassen freischalten")
@@ -222,8 +233,9 @@ elif st.session_state.view == "hq":
                             st.warning("Zu wenig Credits!")
 
         st.markdown("---")
-        st.markdown("### 📊 Stats")
-        st.write(f"- ❤️ **Max HP:** {ship_data['max_hp']} HP")
+        st.markdown("### 📊 Ausrüstung & Stats")
+        st.write(f"- ❤️ **Max HP:** {ship_data['max_hp']} HP ({HP_UPGRADES[ship_data['hp_level']]['name']})")
+        st.write(f"- 🛡️ **Panzerung:** {ARMOR_UPGRADES[ship_data['armor_level']]['name']}")
         
         if current_ship in ["Schnellboot", "Zerstörer"]:
             t_info = TORPEDO_UPGRADES[ship_data["torpedo_level"]]
@@ -266,10 +278,11 @@ elif st.session_state.view == "hq":
             st.session_state.view = "dock"
             st.rerun()
 
-# --- VIEW 2: DOCK ---
+# --- VIEW 2: DOCK (UPGRADES) ---
 elif st.session_state.view == "dock":
     st.subheader(f"⚓ Marine-Werft: Arsenalkatalog für {current_ship}")
     
+    # REPARATUR & NACHSCHUB
     c1, c2 = st.columns(2)
     with c1:
         if st.button("🛠️ Reparieren (+40 HP) - 25 G"):
@@ -294,7 +307,43 @@ elif st.session_state.view == "dock":
                     add_log("💣 Munition nachgeladen.")
                     st.rerun()
 
-    # GESCHÜTZE & TORPEDOS UPGRADES
+    # PANZERUNG & HP UPGRADES
+    st.markdown("---")
+    st.markdown("### 🛡️ Rumpf & Panzerungs-Upgrades")
+    col_arm, col_hp = st.columns(2)
+    
+    with col_arm:
+        st.markdown("**Schiffs-Panzerung**")
+        for lvl in [1, 2]:
+            info = ARMOR_UPGRADES[lvl]
+            st.write(f"• **{info['name']}** ({info['cost']} G)")
+            if ship_data["armor_level"] >= lvl:
+                st.caption("✅ Bereits verbaut")
+            else:
+                if st.button(f"Kaufen ({info['cost']} G)", key=f"arm_{lvl}"):
+                    if st.session_state.credits >= info["cost"] or st.session_state.game_mode == "Test":
+                        if st.session_state.game_mode != "Test": st.session_state.credits -= info["cost"]
+                        ship_data["armor_level"] = lvl
+                        add_log(f"🛡️ {info['name']} montiert!")
+                        st.rerun()
+
+    with col_hp:
+        st.markdown("**Rumpf-Erweiterung (Max HP)**")
+        for lvl in [1, 2]:
+            info = HP_UPGRADES[lvl]
+            st.write(f"• **{info['name']}** ({info['cost']} G)")
+            if ship_data["hp_level"] >= lvl:
+                st.caption("✅ Bereits verbaut")
+            else:
+                if st.button(f"Kaufen ({info['cost']} G)", key=f"hp_{lvl}"):
+                    if st.session_state.credits >= info["cost"] or st.session_state.game_mode == "Test":
+                        if st.session_state.game_mode != "Test": st.session_state.credits -= info["cost"]
+                        ship_data["hp_level"] = lvl
+                        apply_hp_upgrade(ship_data)
+                        add_log(f"❤️ {info['name']} eingebaut!")
+                        st.rerun()
+
+    # WAFFEN-UPGRADES
     if current_ship == "Panzerkreuzer":
         st.markdown("---")
         st.markdown("### 💥 Mittlere Artillerie")
@@ -355,6 +404,26 @@ elif st.session_state.view == "dock":
                             add_log(f"🚀 Torpedosystem auf Stufe {lvl} aufgerüstet!")
                             st.rerun()
 
+    elif current_ship == "Flugzeugträger":
+        st.markdown("---")
+        st.markdown("### ✈️ Flugzeugstaffeln")
+        cols_p = st.columns(2)
+        for lvl in [2, 3]:
+            info = PLANE_UPGRADES[lvl]
+            with cols_p[lvl-2]:
+                st.markdown(f"**Stufe {lvl}: {info['name']}**")
+                st.write(f"Schaden: `{info['dmg'][0]}-{info['dmg'][1]}`")
+                st.caption(f"Preis: {info['cost']} G")
+                if ship_data.get("plane_level") == lvl:
+                    st.success("✅ Ausgerüstet")
+                else:
+                    if st.button(f"Kaufen ({info['cost']} G)", key=f"plane_{lvl}"):
+                        if st.session_state.credits >= info["cost"] or st.session_state.game_mode == "Test":
+                            if st.session_state.game_mode != "Test": st.session_state.credits -= info["cost"]
+                            ship_data["plane_level"] = lvl
+                            add_log(f"✈️ Staffel auf Stufe {lvl} aufgerüstet!")
+                            st.rerun()
+
     st.markdown("---")
     if st.button("⬅️ Zurück zum HQ"):
         st.session_state.view = "hq"
@@ -407,7 +476,6 @@ elif st.session_state.view == "combat":
                     add_log(f"🚀 Torpedo trifft für {dmg} Schaden!")
                 st.rerun()
         with b2:
-            # Spezielle U-Boot-Effektivität
             is_sub = "U-Boot" in st.session_state.enemy_name
             lbl = "💣 Wasserbomben (Bonus vs U-Boot!)" if is_sub else "💨 Nebelwand legen"
             if st.button(lbl):
