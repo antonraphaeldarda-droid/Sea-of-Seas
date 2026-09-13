@@ -1,14 +1,36 @@
 import streamlit as st
 import random
+import os
 
-# Seite konfigurieren
+# Page configuration
 st.set_page_config(page_title="Sea of Seas", page_icon="⚓", layout="wide")
 
-st.title("⚓ Sea of Seas - Tactical Fleet Commander")
+# Custom CSS styling for a naval dashboard feel
+st.markdown("""
+<style>
+    .stButton>button {
+        width: 100%;
+        border-radius: 6px;
+        font-weight: bold;
+    }
+    .metric-box {
+        background-color: #1e293b;
+        padding: 10px;
+        border-radius: 8px;
+        text-align: center;
+        border: 1px solid #334155;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# Spielstatus initialisieren
+# Grid Settings
+GRID_SIZE = 6
+
+# Initialize session state variables
 if "game_started" not in st.session_state:
     st.session_state.game_started = False
+if "player_pos" not in st.session_state:
+    st.session_state.player_pos = [0, 0]
 if "fleet_hp" not in st.session_state:
     st.session_state.fleet_hp = 100
 if "max_hp" not in st.session_state:
@@ -17,190 +39,243 @@ if "ammo" not in st.session_state:
     st.session_state.ammo = 50
 if "credits" not in st.session_state:
     st.session_state.credits = 100
-if "day" not in st.session_state:
-    st.session_state.day = 1
-if "log" not in st.session_state:
-    st.session_state.log = []
-if "enemy_hp" not in st.session_state:
-    st.session_state.enemy_hp = 0
 if "in_combat" not in st.session_state:
     st.session_state.in_combat = False
+if "enemy_hp" not in st.session_state:
+    st.session_state.enemy_hp = 0
+if "enemy_max_hp" not in st.session_state:
+    st.session_state.enemy_max_hp = 0
+if "log" not in st.session_state:
+    st.session_state.log = ["Willkommen auf den Meeren, Kapitän!"]
 
-# Funktion für Logbucheinträge
+# Map items generator
+if "map_items" not in st.session_state:
+    items = {}
+    # Place Port at bottom-right
+    items[(5, 5)] = "port"
+    # Place some enemies and treasure randomly
+    random.seed(42)  # Fixed layout per game restart
+    for _ in range(4):
+        rx, ry = random.randint(0, 5), random.randint(0, 5)
+        if (rx, ry) not in [(0, 0), (5, 5)]:
+            items[(rx, ry)] = "enemy"
+    for _ in range(3):
+        rx, ry = random.randint(0, 5), random.randint(0, 5)
+        if (rx, ry) not in [(0, 0), (5, 5)] and (rx, ry) not in items:
+            items[(rx, ry)] = "treasure"
+    st.session_state.map_items = items
+
 def add_log(text):
-    st.session_state.log.insert(0, f"Tag {st.session_state.day}: {text}")
+    st.session_state.log.insert(0, text)
 
-# ----------------- KAPITÄNS-AUSWAHL -----------------
-if not st.session_state.game_started:
-    st.subheader("Wilkommen, Kommandant! Wählen Sie Ihre Startflotte:")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.write("### 🚤 Schnelle EsSKORTE")
-        st.write("- **Hülle:** 80")
-        st.write("- **Munition:** 70")
-        st.write("- **Start-Credits:** 150")
-        if st.button("Eskorte wählen"):
-            st.session_state.fleet_hp = 80
-            st.session_state.max_hp = 80
-            st.session_state.ammo = 70
-            st.session_state.credits = 150
-            st.session_state.game_started = True
-            add_log("Kommando über die Schnelle Eskorte übernommen.")
-            st.rerun()
+# Function to safely load image if available
+def show_image(image_path, caption=""):
+    if os.path.exists(image_path):
+        st.image(image_path, use_container_width=True, caption=caption)
+    else:
+        st.info(f"📷 [{caption}] (Bild '{image_path}' nicht gefunden)")
 
-    with col2:
-        st.write("### 🛳️ Schlachtflotte")
-        st.write("- **Hülle:** 120")
-        st.write("- **Munition:** 40")
-        st.write("- **Start-Credits:** 100")
-        if st.button("Schlachtflotte wählen"):
-            st.session_state.fleet_hp = 120
-            st.session_state.max_hp = 120
-            st.session_state.ammo = 40
-            st.session_state.credits = 100
-            st.session_state.game_started = True
-            add_log("Kommando über die Schlachtflotte übernommen.")
-            st.rerun()
+# ----------------- MAIN TITLE -----------------
+st.title("⚓ Sea of Seas: Tactical Naval Operations")
 
-    with col3:
-        st.write("### ⚓ Ausgewogene Task Force")
-        st.write("- **Hülle:** 100")
-        st.write("- **Munition:** 50")
-        st.write("- **Start-Credits:** 100")
-        if st.button("Task Force wählen"):
-            st.session_state.fleet_hp = 100
-            st.session_state.max_hp = 100
-            st.session_state.ammo = 50
-            st.session_state.credits = 100
-            st.session_state.game_started = True
-            add_log("Kommando über die Task Force übernommen.")
-            st.rerun()
+# Sidebar Status Dashboard
+st.sidebar.header("📊 COMMAND DASHBOARD")
+st.sidebar.progress(max(0.0, min(1.0, st.session_state.fleet_hp / st.session_state.max_hp)), 
+                    text=f"Hülle: {st.session_state.fleet_hp}/{st.session_state.max_hp} HP")
+st.sidebar.metric("Munition 💣", f"{st.session_state.ammo} Schuss")
+st.sidebar.metric("Schatz / Credits 🪙", f"{st.session_state.credits} G")
 
-# ----------------- SPIELSCHLEIFE -----------------
-else:
-    # Statusleiste oben anzeigen
-    st.sidebar.header("📊 Flottenstatus")
-    st.sidebar.metric("Tag auf See", st.session_state.day)
-    st.sidebar.progress(st.session_state.fleet_hp / st.session_state.max_hp, text=f"Hülle: {st.session_state.fleet_hp}/{st.session_state.max_hp}")
-    st.sidebar.metric("Munition", f"{st.session_state.ammo} Schuss")
-    st.sidebar.metric("Credits", f"{st.session_state.credits} 🪙")
-    
-    if st.sidebar.button("Game Reset / Neustart"):
+if st.sidebar.button("🔄 Spiel neustarten"):
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.rerun()
+
+# Check Game Over
+if st.session_state.fleet_hp <= 0:
+    st.error("💥 IHRE FLOTTE WURDE ZERSTÖRT! DAS SPIEL IST VORBEI.")
+    if st.button("Neues Spiel beginnen"):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.rerun()
 
-    # Game Over Prüfung
-    if st.session_state.fleet_hp <= 0:
-        st.error("💥 Ihre Flotte wurde zerstört! Das Spiel ist vorbei.")
-        if st.button("Neues Spiel starten"):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.rerun()
-    else:
-        # KAMPFMODUS
-        if st.session_state.in_combat:
-            st.warning("⚠️ **FEINDKONTAKT! Ein feindlicher Verband greift an!**")
-            st.write(f"Feindliche Flottenstärke: **{st.session_state.enemy_hp} HP**")
-            
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                if st.button("🎯 Breitseite feuern (-5 Munition)"):
-                    if st.session_state.ammo >= 5:
-                        dmg = random.randint(15, 35)
-                        st.session_state.ammo -= 5
-                        st.session_state.enemy_hp -= dmg
-                        add_log(f"Volltreffer gelandet! Feind erleidet {dmg} Schaden.")
-                        
-                        # Feind schlägt zurück
-                        if st.session_state.enemy_hp > 0:
-                            e_dmg = random.randint(5, 20)
-                            st.session_state.fleet_hp -= e_dmg
-                            add_log(f"Feind feuert zurück und verursacht {e_dmg} Schaden!")
-                        else:
-                            st.success("🎉 Feindlicher Verband zerstört! Belohnung: 50 Credits & 15 Munition.")
-                            st.session_state.credits += 50
-                            st.session_state.ammo += 15
-                            st.session_state.in_combat = False
-                    else:
-                        st.error("Keine Munition mehr!")
-                    st.rerun()
-            
-            with c2:
-                if st.button("🛡️ Defensivmanöver"):
-                    e_dmg = random.randint(0, 8)
+# ----------------- COMBAT DASHBOARD -----------------
+elif st.session_state.in_combat:
+    st.subheader("⚔️ KAMPFMODUS: FEINDKONTAKT!")
+    
+    col_play, col_vs, col_ene = st.columns([4, 1, 4])
+    
+    with col_play:
+        st.markdown("### 🚢 Ihr Flaggschiff")
+        show_image("player_ship.png", "Black Sea - Panzerkreuzer")
+        st.progress(max(0.0, min(1.0, st.session_state.fleet_hp / st.session_state.max_hp)))
+        st.caption(f"HP: {st.session_state.fleet_hp} / {st.session_state.max_hp}")
+
+    with col_vs:
+        st.markdown("<h2 style='text-align: center; margin-top: 100px;'>VS</h2>", unsafe_allow_html=True)
+
+    with col_ene:
+        st.markdown("### 🏴‍☠️ Feindliche Fregatte")
+        show_image("enemy_ship.png", "Skull's Grin - Piratenfregatte")
+        st.progress(max(0.0, min(1.0, st.session_state.enemy_hp / st.session_state.enemy_max_hp)))
+        st.caption(f"HP: {st.session_state.enemy_hp} / {st.session_state.enemy_max_hp}")
+
+    st.markdown("---")
+    st.subheader("🎯 Gefechtsbefehle")
+    
+    btn1, btn2, btn3 = st.columns(3)
+    
+    with btn1:
+        if st.button("💥 Breitseite feuern (-5 Munition)"):
+            if st.session_state.ammo >= 5:
+                st.session_state.ammo -= 5
+                dmg = random.randint(18, 35)
+                st.session_state.enemy_hp -= dmg
+                add_log(f"⚔️ Breitseite! Feind erleidet {dmg} Schaden.")
+                
+                # Counter Attack
+                if st.session_state.enemy_hp > 0:
+                    e_dmg = random.randint(8, 22)
                     st.session_state.fleet_hp -= e_dmg
-                    add_log(f"Defensivmanöver ausgeführt. Geringer Schaden erlitten: {e_dmg} HP.")
+                    add_log(f"💥 Feind schlägt zurück! {e_dmg} Schaden erlitten.")
+                else:
+                    st.success("🎉 FEIND ZERSTÖRT! Belohnung: +60 Credits, +15 Munition")
+                    st.session_state.credits += 60
+                    st.session_state.ammo += 15
+                    st.session_state.in_combat = False
+                    # Remove enemy from map
+                    pos = tuple(st.session_state.player_pos)
+                    if pos in st.session_state.map_items:
+                        del st.session_state.map_items[pos]
+            else:
+                st.error("Keine Munition mehr verfügbar!")
+            st.rerun()
+
+    with btn2:
+        if st.button("🛡️ Ausweichmanöver (Schaden halbieren)"):
+            e_dmg = random.randint(3, 10)
+            st.session_state.fleet_hp -= e_dmg
+            add_log(f"🛡️ Ausweichmanöver ausgeführt. Geringer Schaden erlitten ({e_dmg} HP).")
+            st.rerun()
+
+    with btn3:
+        if st.button("💨 Fluchtversuch"):
+            if random.random() > 0.4:
+                st.success("Erfolgreich entkommen!")
+                st.session_state.in_combat = False
+                add_log("💨 Aus dem Gefecht geflohen.")
+            else:
+                e_dmg = random.randint(12, 25)
+                st.session_state.fleet_hp -= e_dmg
+                add_log(f"⚠️ Flucht fehlgeschlagen! Feind trifft das Heck ({e_dmg} Schaden).")
+            st.rerun()
+
+# ----------------- MAP & EXPLORATION MODE -----------------
+else:
+    col_map, col_controls = st.columns([3, 2])
+    
+    with col_map:
+        st.subheader("🗺️ Seekarte der Region")
+        
+        # Draw 6x6 Grid
+        grid_html = ""
+        px, py = st.session_state.player_pos
+        
+        for r in range(GRID_SIZE):
+            cols = st.columns(GRID_SIZE)
+            for c in range(GRID_SIZE):
+                cell_icon = "🌊"
+                if [r, c] == [px, py]:
+                    cell_icon = "🚢"
+                elif (r, c) in st.session_state.map_items:
+                    item = st.session_state.map_items[(r, c)]
+                    if item == "port":
+                        cell_icon = "⚓"
+                    elif item == "enemy":
+                        cell_icon = "🏴‍☠️"
+                    elif item == "treasure":
+                        cell_icon = "📦"
+                
+                cols[c].button(cell_icon, key=f"cell_{r}_{c}", disabled=True)
+
+    with col_controls:
+        st.subheader("🧭 Navigationsbrücke")
+        st.write(f"Aktuelle Position: **Sektor [{px}, {py}]**")
+        
+        # Navigation Buttons (D-Pad style)
+        _, u_btn, _ = st.columns(3)
+        l_btn, _, r_btn = st.columns(3)
+        _, d_btn, _ = st.columns(3)
+        
+        moved = False
+        with u_btn:
+            if st.button("⬆️ Nord") and px > 0:
+                st.session_state.player_pos[0] -= 1
+                moved = True
+        with l_btn:
+            if st.button("⬅️ West") and py > 0:
+                st.session_state.player_pos[1] -= 1
+                moved = True
+        with r_btn:
+            if st.button("East ➡️") and py < GRID_SIZE - 1:
+                st.session_state.player_pos[1] += 1
+                moved = True
+        with d_btn:
+            if st.button("⬇️ Süd") and px < GRID_SIZE - 1:
+                st.session_state.player_pos[0] += 1
+                moved = True
+                
+        if moved:
+            pos = tuple(st.session_state.player_pos)
+            add_log(f"Neuer Kurs gesetzt: Sektor {pos}")
+            
+            # Check for events on current cell
+            if pos in st.session_state.map_items:
+                item_type = st.session_state.map_items[pos]
+                
+                if item_type == "enemy":
+                    st.session_state.in_combat = True
+                    st.session_state.enemy_hp = 50
+                    st.session_state.enemy_max_hp = 50
+                    add_log("⚠️ FEINDKONTAKT! Piratenschiff gesichtet!")
                     st.rerun()
                     
-            with c3:
-                if st.button("💨 Rückzug versuchen"):
-                    if random.choice([True, False]):
-                        st.success("Erfolgreich aus dem Kampf zurückgezogen!")
-                        st.session_state.in_combat = False
-                    else:
-                        e_dmg = random.randint(10, 25)
-                        st.session_state.fleet_hp -= e_dmg
-                        add_log(f"Rückzug fehlgeschlagen! Feind schießt in den Rumpf ({e_dmg} Schaden).")
+                elif item_type == "treasure":
+                    gold = random.randint(30, 80)
+                    ammo = random.randint(10, 25)
+                    st.session_state.credits += gold
+                    st.session_state.ammo += ammo
+                    add_log(f"📦 Treibgut aufgefischt! +{gold} Gold, +{ammo} Munition erhalten.")
+                    del st.session_state.map_items[pos]
                     st.rerun()
 
-        # ERFORSCHUNG & EVENT-MODUS
-        else:
-            st.subheader("🌐 Befehlsstand")
-            st.write("Wählen Sie Ihre nächste Aktion für den heutigen Tag:")
+        # Check Port interaction
+        if tuple(st.session_state.player_pos) == (5, 5):
+            st.markdown("---")
+            st.subheader("⚓ Marine-Hafen Fort Vanguard")
+            show_image("port.png", "Fort Vanguard - Sichere Zuflucht")
             
-            col_a, col_b, col_c = st.columns(3)
-            
-            with col_a:
-                if st.button("🧭 Kurs halten / Patrouille"):
-                    st.session_state.day += 1
-                    event = random.choice(["combat", "supply", "quiet", "storm"])
-                    
-                    if event == "combat":
-                        st.session_state.in_combat = True
-                        st.session_state.enemy_hp = random.randint(30, 70)
-                        add_log("Feindliche Signale auf dem Radar entdeckt!")
-                    elif event == "supply":
-                        gained = random.randint(10, 25)
-                        st.session_state.ammo += gained
-                        add_log(f"Treibendes Versorgungsdepot gefunden! +{gained} Munition.")
-                    elif event == "storm":
-                        damage = random.randint(5, 15)
-                        st.session_state.fleet_hp -= damage
-                        add_log(f"In einen schweren Sturm geraten! {damage} Schaden am Rumpf.")
+            p1, p2 = st.columns(2)
+            with p1:
+                if st.button("🔧 Flotte reparieren (+40 HP / 40 G)"):
+                    if st.session_state.credits >= 40:
+                        st.session_state.credits -= 40
+                        st.session_state.fleet_hp = min(st.session_state.max_hp, st.session_state.fleet_hp + 40)
+                        add_log("🔧 Flotte im Hafen repariert.")
+                        st.rerun()
                     else:
-                        add_log("Ruhiger Tag auf See. Keine Vorkommnisse.")
-                    st.rerun()
-
-            with col_b:
-                if st.button("⚓ Hafen ansteuern (Reparatur & Versorgen)"):
-                    st.session_state.day += 1
+                        st.error("Nicht genug Credits!")
+            with p2:
+                if st.button("💣 Munition aufstocken (+30 Schuss / 30 G)"):
                     if st.session_state.credits >= 30:
                         st.session_state.credits -= 30
-                        st.session_state.fleet_hp = min(st.session_state.max_hp, st.session_state.fleet_hp + 30)
-                        st.session_state.ammo += 20
-                        add_log("Im Versorgungs-Hafen angedockt. Flotte repariert und aufgerüstet (-30 Credits).")
+                        st.session_state.ammo += 30
+                        add_log("💣 Munitionsdepot aufgestockt.")
+                        st.rerun()
                     else:
-                        add_log("Nicht genug Credits für Hafendienste!")
-                    st.rerun()
+                        st.error("Nicht genug Credits!")
 
-            with col_c:
-                if st.button("📜 Handelskonvoi eskortieren"):
-                    st.session_state.day += 1
-                    if random.random() > 0.3:
-                        earned = random.randint(40, 80)
-                        st.session_state.credits += earned
-                        add_log(f"Konvoi sicher befördert! Belohnung: {earned} Credits.")
-                    else:
-                        st.session_state.in_combat = True
-                        st.session_state.enemy_hp = 60
-                        add_log("Der Konvoi wurde überfallen! Gefecht beginnt!")
-                    st.rerun()
-
-    # Logbuch anzeigen
-    st.markdown("---")
-    st.subheader("📜 Logbuch des Kommandanten")
-    for entry in st.session_state.log:
-        st.text(entry)
+# Log Output Bottom
+st.markdown("---")
+st.subheader("📜 Logbuch des Kommandanten")
+for log_entry in st.session_state.log[:5]:
+    st.text(log_entry)
